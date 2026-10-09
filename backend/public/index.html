@@ -15,7 +15,8 @@
   header { background: var(--brand); color: #fff; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   header h1 { margin: 0; font-size: 20px; }
   header .sub { font-size: 13px; opacity: .8; }
-  main { max-width: 1000px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  /* PAGE WIDTH: change 1280px to make the whole page wider or narrower (e.g. 1000px, 1440px, or 100% for full screen) */
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
   .card h2 { margin: 0 0 12px; font-size: 16px; }
   .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -62,6 +63,12 @@
   .boxsel { font-weight: 700; font-size: 16px; max-width: 100%; }
   .linkbar { display: flex; gap: 10px; flex-wrap: wrap; }
   .linkbar .link { font-size: 13px; }
+  /* Toolbox card header: [drop-down][+ Add toolbox] on the left, Rename/New key/Remove on the right.
+     If the card is too narrow for both, the links drop to the next line (still on the right). */
+  .boxhead-row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .boxhead-row .boxsel { max-width: 240px; }
+  .boxhead-row .linkbar { flex-basis: 100%; white-space: nowrap; }  #showAddBoxBtn { white-space: nowrap; margin-left: auto; }
+  .boxhead-row #boxHead { flex: 1; }
   .pill.move { background: #dbeafe; color: #1e40af; }
   select { font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: #fff; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
@@ -114,7 +121,7 @@
       <div class="bar"><i id="countBar" style="width:0"></i></div>
     </section>
     <section class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div class="boxhead-row">
         <div id="boxHead"><select id="boxSelect" class="boxsel" aria-label="Choose toolbox"></select></div>
         <div class="linkbar" id="boxLinks"></div>
       </div>
@@ -324,14 +331,16 @@ function render() {
   if (sel && editingBox === sel.uuid) {
     $("boxHead").innerHTML = `<form class="row" data-rename-box="${sel.uuid}"><input name="name" value="${esc(sel.name)}"><button class="primary">Save</button><button type="button" data-cancel-box>Cancel</button></form>`;
   } else {
-    $("boxHead").innerHTML = `<select id="boxSelect" class="boxsel" aria-label="Choose toolbox">
-      ${devices.length ? `<option value="all" ${view === "all" ? "selected" : ""}>All toolboxes (${devices.length})</option>` : ""}
-      ${devices.map((d) => `<option value="${d.uuid}" ${d.uuid === view ? "selected" : ""}>${esc(d.name)}</option>`).join("")}
-    </select>`;
+    $("boxHead").innerHTML = `<div class="row" style="gap:8px">
+      <select id="boxSelect" class="boxsel" aria-label="Choose toolbox">
+        ${devices.length ? `<option value="all" ${view === "all" ? "selected" : ""}>All toolboxes (${devices.length})</option>` : ""}
+        ${devices.map((d) => `<option value="${d.uuid}" ${d.uuid === view ? "selected" : ""}>${esc(d.name)}</option>`).join("")}
+      </select>
+      <button type="button" id="showAddBoxBtn">+ Add toolbox</button>
+    </div>`;
     $("boxSelect").onchange = (e) => { view = e.target.value; viewPref.set(view); mapPick = null; render(); };
   }
-  $("boxLinks").innerHTML = (sel && editingBox !== sel.uuid ? boxLinks(sel) : "") +
-    `<button class="link" id="showAddBoxBtn">+ Add toolbox</button>`;
+  $("boxLinks").innerHTML = sel && editingBox !== sel.uuid ? boxLinks(sel) : "";
 
   // right card + left card
   if (sel) {
@@ -406,7 +415,8 @@ function render() {
   }
 
   // ---- tools ----
-  const shownTags = sel ? tags.filter((t) => t.deviceUuid === sel.uuid) : tags;
+  // One toolbox picked: its tools + tools never seen in any box yet (so nothing "disappears")
+  const shownTags = sel ? tags.filter((t) => !t.deviceUuid || t.deviceUuid === sel.uuid) : tags;
   $("toolRows").innerHTML = shownTags.map((t) => {
     const status = t.inBox ? '<span class="pill ok">IN BOX</span>'
       : (t.lastInBoxOn || t.lastSeenOn) ? '<span class="pill bad">MISSING</span>'
