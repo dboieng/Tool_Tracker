@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tool Tracker</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --text: #1f2937; --muted: #6b7280; --line: #e5e7eb;
+    --brand: #1e3a5f; --ok: #15803d; --ok-bg: #dcfce7; --bad: #b91c1c; --bad-bg: #fee2e2;
+    --warn: #a16207; --warn-bg: #fef9c3; --grey-bg: #f3f4f6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; }
+  header { background: var(--brand); color: #fff; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header .sub { font-size: 13px; opacity: .8; }
+  main { max-width: 1000px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 16px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .big { font-size: 34px; font-weight: 700; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.grey { background: var(--grey-bg); color: var(--muted); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .stat { background: var(--grey-bg); border-radius: 8px; padding: 10px; }
+  .stat .label { font-size: 12px; color: var(--muted); }
+  .stat .value { font-size: 17px; font-weight: 600; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  /* Phone: each table row becomes a card, like Tradies Diary's worker logs */
+  @media (max-width: 640px) {
+    table thead { display: none; }
+    table, tbody, tr, td { display: block; width: 100%; }
+    tr { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; }
+    td { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--grey-bg); text-align: right; }
+    td[data-label]::before { content: attr(data-label); font-weight: 600; color: var(--muted); text-align: left; }
+  }
+  button, input { font: inherit; }
+  button { border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+  button.danger { color: var(--bad); }
+  button.link { border: 0; background: none; color: var(--brand); padding: 2px 4px; text-decoration: underline; }
+  input { border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-width: 0; }
+  .map { width: 100%; height: 440px; border: 0; border-radius: 8px; background: var(--grey-bg); }
+  @media (max-width: 640px) { .map { height: 320px; } }
+  .boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
+  .box { border: 1px solid var(--line); border-radius: 10px; padding: 12px; cursor: pointer; }
+  .box.sel { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand) inset; }
+  .box h3 { margin: 0; font-size: 15px; }
+  .keybox { background: var(--warn-bg); border: 1px solid #fde68a; border-radius: 8px; padding: 12px; }
+  .bar { height: 8px; background: var(--grey-bg); border-radius: 99px; overflow: hidden; margin-top: 10px; }
+  .bar i { display: block; height: 100%; background: var(--ok); }
+  .boxsel { font-weight: 700; font-size: 16px; max-width: 100%; }
+  .linkbar { display: flex; gap: 10px; flex-wrap: wrap; }
+  .linkbar .link { font-size: 13px; }
+  .pill.move { background: #dbeafe; color: #1e40af; }
+  select { font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: #fff; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 5px 12px; background: #fff; color: var(--muted); }
+  .seg button.on { background: var(--brand); color: #fff; }
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .timeline li:last-child { border-bottom: 0; }
+  .msg { padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  .msg.err { background: var(--bad-bg); color: var(--bad); }
+  .msg.info { background: var(--ok-bg); color: var(--ok); }
+  .hidden { display: none !important; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  #login { max-width: 380px; margin: 60px auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Tool Tracker</h1>
+    <div class="sub">DCB toolboxes — which tools are back in which box</div>
+  </div>
+  <div class="row">
+    <span class="sub" id="updated"></span>
+    <button id="refreshBtn">Refresh</button>
+  </div>
+</header>
+
+<!-- ============ LOGIN (standalone only) ============ -->
+<div id="login" class="card hidden">
+  <h2>Enter dashboard password</h2>
+  <p class="muted">This is the DASHBOARD_TOKEN from the server's .env file.</p>
+  <form id="loginForm" class="row">
+    <input id="tokenInput" type="password" placeholder="Password" style="flex:1" autocomplete="current-password">
+    <button class="primary" type="submit">Open</button>
+  </form>
+  <div id="loginErr" class="msg err hidden" style="margin-top:10px"></div>
+</div>
+
+<main id="app" class="hidden">
+  <div id="globalMsg" class="msg hidden"></div>
+
+  <!-- ============ TOP ROW: count (left) + toolbox picker (right) ============ -->
+  <div class="grid2">
+    <section class="card">
+      <h2 id="countTitle">Tools in a toolbox</h2>
+      <div class="big" id="countText">–</div>
+      <div class="muted" id="countSub"></div>
+      <div class="bar"><i id="countBar" style="width:0"></i></div>
+    </section>
+    <section class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div id="boxHead"><select id="boxSelect" class="boxsel" aria-label="Choose toolbox"></select></div>
+        <div class="linkbar" id="boxLinks"></div>
+      </div>
+      <form id="addBoxForm" class="row hidden" style="margin-bottom:12px">
+        <input id="addBoxName" placeholder="Toolbox name or job site, e.g. 12 Smith St" style="flex:1">
+        <button class="primary" type="submit">Create</button>
+        <button type="button" id="cancelAddBoxBtn">Cancel</button>
+      </form>
+      <div id="keyPanel" class="keybox hidden" style="margin-bottom:12px"></div>
+      <div class="stats" id="boxStats"></div>
+      <div class="muted" id="boxNote" style="margin-top:10px"></div>
+    </section>
+  </div>
+
+  <!-- ============ ALL TOOLBOXES: one row per box (shown when "All toolboxes" is picked) ============ -->
+  <div id="boxRows" style="display:grid;gap:16px"></div>
+
+  <!-- ============ TOOLS ============ -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0" id="toolsTitle">Tools</h2>
+      <div class="row">
+        <span class="muted">Battery</span>
+        <div class="seg" role="group" aria-label="Battery display">
+          <button type="button" data-unit="V">Volts</button>
+          <button type="button" data-unit="%">%</button>
+        </div>
+        <button id="showAddBtn">+ Add tool</button>
+      </div>
+    </div>
+    <form id="addForm" class="row hidden" style="margin-bottom:12px">
+      <input id="addMac" placeholder="Tag MAC e.g. ec:5a:5f:39:bd:42" style="flex:2" class="mono">
+      <input id="addName" placeholder="Tool name e.g. Hilti drill" style="flex:2">
+      <button class="primary" type="submit">Save</button>
+      <button type="button" id="cancelAddBtn">Cancel</button>
+    </form>
+    <table>
+      <thead><tr><th>Tool</th><th>Status</th><th>Toolbox</th><th>Last in box</th><th>Signal</th><th>Tag battery</th><th></th></tr></thead>
+      <tbody id="toolRows"></tbody>
+    </table>
+  </section>
+
+  <!-- ============ LOCATION (full width, big map) ============ -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0" id="mapTitle">Last known location</h2>
+    </div>
+    <div id="mapWrap"></div>
+    <div class="muted" id="gpsText" style="margin-top:8px"></div>
+  </section>
+
+  <!-- ============ CHANGES ============ -->
+  <section class="card">
+    <h2>Recent changes</h2>
+    <ul class="timeline" id="changes"></ul>
+  </section>
+
+  <!-- ============ UNKNOWN TAGS ============ -->
+  <section class="card" id="unknownCard">
+    <h2>Unknown tags nearby <span class="muted">(last 7 days, not in the tool list)</span></h2>
+    <table>
+      <thead><tr><th>MAC</th><th>Last heard</th><th>Signal</th><th>Battery</th><th></th></tr></thead>
+      <tbody id="unknownRows"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+// =====================================================================
+// Settings
+// =====================================================================
+const API = "/tool-tracker";          // same server that serves this page
+const REFRESH_MS = 60 * 1000;         // auto refresh every minute
+const STALE_HOURS = 26;               // Walter reports daily; warn if older than this
+const LOW_TAG_BATT = 2.7;             // iBS05 coin cell getting low
+
+// Battery % is an ESTIMATE from voltage: [volts, percent] points, straight lines between.
+// iBS05 tag: 3 V lithium coin cell (flat ~3.0 V most of its life, drops fast near the end)
+const TAG_CURVE    = [[3.0, 100], [2.9, 80], [2.8, 60], [2.7, 40], [2.6, 20], [2.5, 0]];
+// Walter: 3 x AA lithium (~5.4 V fresh) through the 1N5819 diode (-0.3 V)
+const WALTER_CURVE = [[5.1, 100], [4.9, 80], [4.7, 60], [4.5, 40], [4.2, 20], [3.6, 0]];
+
+// =====================================================================
+// Helpers
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const store = {
+  get() { try { return localStorage.getItem("toolTrackerToken") || ""; } catch { return ""; } },
+  set(v) { try { localStorage.setItem("toolTrackerToken", v); } catch {} },
+  clear() { try { localStorage.removeItem("toolTrackerToken"); } catch {} },
+};
+let token = store.get();
+
+// Remember Volts / % choice in this browser
+const unitPref = {
+  get() { try { return localStorage.getItem("toolTrackerBattUnit") === "%" ? "%" : "V"; } catch { return "V"; } },
+  set(v) { try { localStorage.setItem("toolTrackerBattUnit", v); } catch {} },
+};
+let battUnit = unitPref.get();
+
+function percentFrom(volts, curve) {
+  if (volts >= curve[0][0]) return 100;
+  for (let i = 1; i < curve.length; i++) {
+    const [v1, p1] = curve[i - 1], [v2, p2] = curve[i];
+    if (volts >= v2) return Math.round(p2 + (volts - v2) * (p1 - p2) / (v1 - v2));
+  }
+  return 0;
+}
+// Text for a battery value in the chosen unit
+function battText(volts, curve) {
+  if (!volts) return "–";
+  return battUnit === "%" ? percentFrom(volts, curve) + "%" : volts.toFixed(2) + " V";
+}
+function battTitle(volts, curve) {
+  return volts ? `${volts.toFixed(2)} V ≈ ${percentFrom(volts, curve)}% (estimate)` : "";
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, ...(options.headers || {}) },
+  });
+  let body = {};
+  try { body = await res.json(); } catch {}
+  if (res.status === 401) { showLogin("Wrong or missing password."); throw new Error("auth"); }
+  if (!res.ok || body.success === false) throw new Error(body.message || ("HTTP " + res.status));
+  return body.data;
+}
+
+function ago(dateStr) {
+  if (!dateStr) return "never";
+  const s = Math.round((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " days ago";
+}
+const when = (d) => d ? new Date(d).toLocaleString("en-AU", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "–";
+
+function signalWord(rssi) {
+  if (rssi === null || rssi === undefined) return "–";
+  return rssi + " dBm";
+}
+function lteWord(rsrp) {
+  if (rsrp === null || rsrp === undefined) return "–";
+  const q = rsrp > -90 ? "excellent" : rsrp > -105 ? "good" : rsrp > -115 ? "fair" : "weak";
+  return `${rsrp} dBm (${q})`;
+}
+
+function flash(text, kind = "info") {
+  const el = $("globalMsg");
+  el.textContent = text;
+  el.className = "msg " + kind;
+  clearTimeout(flash.t);
+  flash.t = setTimeout(() => el.classList.add("hidden"), 5000);
+}
+
+// =====================================================================
+// Login (standalone stand-in for Tradies Diary's real login)
+// =====================================================================
+function showLogin(err) {
+  $("app").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("loginErr").classList.toggle("hidden", !err);
+  $("loginErr").textContent = err || "";
+}
+$("loginForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  token = $("tokenInput").value.trim();
+  store.set(token);
+  load();
+});
+
+// =====================================================================
+// Render
+// =====================================================================
+let state = null;
+let editing = null;      // uuid of the tool being renamed
+let editingBox = null;   // uuid of the toolbox being renamed
+const viewPref = {
+  get() { try { return localStorage.getItem("toolTrackerView") || ""; } catch { return ""; } },
+  set(v) { try { localStorage.setItem("toolTrackerView", v); } catch {} },
+};
+let view = viewPref.get();  // "all" or a toolbox uuid
+let mapPick = null;         // in "all" view: which box the map shows
+
+function render() {
+  const { devices, tags, unknown, changes, summary } = state;
+
+  // ---- which view? "all" or one toolbox ----
+  if (view !== "all" && !devices.find((d) => d.uuid === view)) view = devices.length > 1 ? "all" : (devices[0]?.uuid || "all");
+  const sel = view === "all" ? null : devices.find((d) => d.uuid === view);
+  const insideOf = (d) => tags.filter((t) => t.inBox && t.deviceUuid === d.uuid);
+  const statBlock = (label, value, title = "") =>
+    `<div class="stat"><div class="label">${label}</div><div class="value" title="${esc(title)}">${value}</div></div>`;
+  const lastReportHtml = (d) => {
+    const stale = !d.lastReportOn || (Date.now() - new Date(d.lastReportOn)) / 3600000 > STALE_HOURS;
+    return esc(ago(d.lastReportOn)) + (stale ? ' <span class="pill warn">late</span>' : "");
+  };
+  const boxLinks = (d) => `<button class="link" data-edit-box="${d.uuid}">Rename</button>
+    <button class="link" data-newkey-box="${d.uuid}" data-name="${esc(d.name)}">New key</button>
+    <button class="link danger" data-delete-box="${d.uuid}" data-name="${esc(d.name)}">Remove</button>`;
+
+  // drop-down (or the rename box while renaming)
+  if (sel && editingBox === sel.uuid) {
+    $("boxHead").innerHTML = `<form class="row" data-rename-box="${sel.uuid}"><input name="name" value="${esc(sel.name)}"><button class="primary">Save</button><button type="button" data-cancel-box>Cancel</button></form>`;
+  } else {
+    $("boxHead").innerHTML = `<select id="boxSelect" class="boxsel" aria-label="Choose toolbox">
+      ${devices.length ? `<option value="all" ${view === "all" ? "selected" : ""}>All toolboxes (${devices.length})</option>` : ""}
+      ${devices.map((d) => `<option value="${d.uuid}" ${d.uuid === view ? "selected" : ""}>${esc(d.name)}</option>`).join("")}
+    </select>`;
+    $("boxSelect").onchange = (e) => { view = e.target.value; viewPref.set(view); mapPick = null; render(); };
+  }
+  $("boxLinks").innerHTML = (sel && editingBox !== sel.uuid ? boxLinks(sel) : "") +
+    `<button class="link" id="showAddBoxBtn">+ Add toolbox</button>`;
+
+  // right card + left card
+  if (sel) {
+    const inside = insideOf(sel);
+    $("boxStats").innerHTML = statBlock("Last report", lastReportHtml(sel), when(sel.lastReportOn)) +
+      statBlock("Walter battery", battText(sel.batteryV, WALTER_CURVE), battTitle(sel.batteryV, WALTER_CURVE)) +
+      statBlock("LTE signal", esc(lteWord(sel.lteRsrp)));
+    $("boxNote").textContent = `${inside.length} tool${inside.length === 1 ? "" : "s"} inside · ${devices.length} toolbox${devices.length === 1 ? "" : "es"} total`;
+  } else {
+    const late = devices.filter((d) => !d.lastReportOn || (Date.now() - new Date(d.lastReportOn)) / 3600000 > STALE_HOURS).length;
+    const newest = devices.map((d) => d.lastReportOn).filter(Boolean).sort().pop();
+    $("boxStats").innerHTML = statBlock("Toolboxes", String(devices.length)) +
+      statBlock("Latest report", esc(ago(newest || null))) +
+      statBlock("Reporting late", late ? `<span class="pill warn">${late}</span>` : "0");
+    $("boxNote").textContent = devices.length ? "Each toolbox is shown below." : 'No toolboxes yet. Click "+ Add toolbox".';
+  }
+
+  const missing = tags.filter((t) => !t.inBox);
+  $("countTitle").textContent = "Tools in a toolbox";
+  $("countText").textContent = `${summary.inBox} of ${summary.tools}`;
+  $("countSub").textContent = missing.length ? "Missing: " + missing.map((t) => t.name).join(", ") : "Every tool is in a toolbox";
+  $("countBar").style.width = summary.tools ? Math.round(100 * summary.inBox / summary.tools) + "%" : "0";
+
+  // ---- "All toolboxes": one row per box (left: what's inside, right: the box) ----
+  $("boxRows").innerHTML = view !== "all" ? "" : devices.map((d) => {
+    const inside = insideOf(d);
+    const title = editingBox === d.uuid
+      ? `<form class="row" data-rename-box="${d.uuid}"><input name="name" value="${esc(d.name)}" style="flex:1"><button class="primary">Save</button><button type="button" data-cancel-box>Cancel</button></form>`
+      : `<h2 style="margin:0">${esc(d.name)}</h2>`;
+    return `<div class="grid2">
+      <section class="card">
+        <h2>Tools in ${esc(d.name)}</h2>
+        <div class="big">${inside.length}</div>
+        <div class="muted">${inside.length ? esc(inside.map((t) => t.name).join(", ")) : "No tools inside"}</div>
+      </section>
+      <section class="card box ${d.uuid === mapPick ? "sel" : ""}" data-box="${d.uuid}">
+        <div class="row" style="justify-content:space-between;margin-bottom:12px">${title}
+          ${editingBox === d.uuid ? "" : `<div class="linkbar">${boxLinks(d)}</div>`}</div>
+        <div class="stats">
+          ${statBlock("Last report", lastReportHtml(d), when(d.lastReportOn))}
+          ${statBlock("Walter battery", battText(d.batteryV, WALTER_CURVE), battTitle(d.batteryV, WALTER_CURVE))}
+          ${statBlock("LTE signal", esc(lteWord(d.lteRsrp)))}
+        </div>
+        <div class="muted" style="margin-top:8px">Click this card to show it on the map</div>
+      </section>
+    </div>`;
+  }).join("");
+
+  $("boxRows").classList.toggle("hidden", view !== "all" || !devices.length);
+
+  // ---- map: chosen box, or (All view) the clicked / most recent box ----
+  if (view === "all" && !devices.find((d) => d.uuid === mapPick)) {
+    mapPick = [...devices].sort((a, b) => String(b.lastReportOn || "").localeCompare(String(a.lastReportOn || "")))[0]?.uuid || null;
+  }
+  const d = sel || devices.find((x) => x.uuid === mapPick);
+  $("mapTitle").textContent = d ? `Location — ${d.name}` : "Last known location";
+  $("toolsTitle").textContent = sel ? `Tools — ${sel.name}` : "Tools";
+  if (d && d.latitude !== null && d.longitude !== null) {
+    const dlat = 0.004, dlon = 0.006;
+    const bbox = [d.longitude - dlon, d.latitude - dlat, d.longitude + dlon, d.latitude + dlat].join(",");
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${d.latitude},${d.longitude}`;
+    if ($("mapWrap").dataset.src !== src) {
+      $("mapWrap").innerHTML = `<iframe class="map" src="${src}" loading="lazy" title="Toolbox location"></iframe>`;
+      $("mapWrap").dataset.src = src;
+    }
+    $("gpsText").innerHTML = `±${Math.round(d.gpsAccuracyM || 0)} m, fixed ${esc(ago(d.gpsOn))} · ` +
+      `<a href="https://maps.google.com/?q=${d.latitude},${d.longitude}" target="_blank" rel="noopener">Open in Google Maps</a>`;
+  } else {
+    $("mapWrap").innerHTML = `<div class="muted">${d ? "No GPS fix received yet for " + esc(d.name) + "." : "No toolboxes yet."}</div>`;
+    $("mapWrap").dataset.src = "";
+    $("gpsText").textContent = "";
+  }
+
+  // ---- tools ----
+  const shownTags = sel ? tags.filter((t) => t.deviceUuid === sel.uuid) : tags;
+  $("toolRows").innerHTML = shownTags.map((t) => {
+    const status = t.inBox ? '<span class="pill ok">IN BOX</span>'
+      : (t.lastInBoxOn || t.lastSeenOn) ? '<span class="pill bad">MISSING</span>'
+      : '<span class="pill grey">NOT SEEN YET</span>';
+    const batt = t.batteryV
+      ? (t.batteryV < LOW_TAG_BATT ? `<span class="pill warn">${battText(t.batteryV, TAG_CURVE)} low</span>` : battText(t.batteryV, TAG_CURVE))
+      : "–";
+    const nameCell = editing === t.uuid
+      ? `<form class="row" data-rename="${t.uuid}"><input name="name" value="${esc(t.name)}" style="flex:1"><button class="primary">Save</button><button type="button" data-cancel>Cancel</button></form>`
+      : `<strong>${esc(t.name)}</strong><div class="muted mono">${esc(t.mac)}</div>`;
+    return `<tr>
+      <td data-label="Tool">${nameCell}</td>
+      <td data-label="Status">${status}</td>
+      <td data-label="Toolbox">${t.deviceName ? (t.inBox ? esc(t.deviceName) : '<span class="muted">last in ' + esc(t.deviceName) + "</span>") : "–"}</td>
+      <td data-label="Last in box" title="${esc(when(t.lastInBoxOn))}">${t.inBox ? "now" : esc(ago(t.lastInBoxOn))}</td>
+      <td data-label="Signal">${esc(signalWord(t.lastRssi))}</td>
+      <td data-label="Tag battery" title="${esc(battTitle(t.batteryV, TAG_CURVE))}">${batt}</td>
+      <td data-label="">${editing === t.uuid ? "" : `<button class="link" data-edit="${t.uuid}">Rename</button><button class="link danger" data-delete="${t.uuid}" data-name="${esc(t.name)}">Remove</button>`}</td>
+    </tr>`;
+  }).join("") || (sel ? `<tr><td colspan="7" class="muted">No tools in ${esc(sel.name)} yet.</td></tr>` : '<tr><td colspan="7" class="muted">No tools yet. Click "+ Add tool".</td></tr>');
+
+  // ---- changes ----
+  $("changes").innerHTML = changes.map((c) => `<li>
+      <span class="pill ${c.change === "RETURNED" ? "ok" : c.change === "MOVED" ? "move" : "bad"}">${esc(c.change)}</span>
+      <strong>${esc(c.toolName)}</strong>
+      <span class="muted">${c.change === "MOVED" ? "into " : c.change === "LEFT" ? "from " : "to "}${esc(c.deviceName || "?")} · ${esc(when(c.on))}${c.latitude !== null ? ` · <a href="https://maps.google.com/?q=${c.latitude},${c.longitude}" target="_blank" rel="noopener">where</a>` : ""}</span>
+    </li>`).join("") || '<li class="muted">No changes yet. A tool leaving or coming back shows up here.</li>';
+
+  // ---- unknown ----
+  $("unknownCard").classList.toggle("hidden", unknown.length === 0);
+  $("unknownRows").innerHTML = unknown.map((u) => `<tr>
+      <td data-label="MAC" class="mono">${esc(u.mac)}</td>
+      <td data-label="Last heard">${esc(ago(u.lastSeenOn))}</td>
+      <td data-label="Signal">${esc(signalWord(u.lastRssi))}</td>
+      <td data-label="Battery" title="${esc(battTitle(u.batteryV, TAG_CURVE))}">${battText(u.batteryV, TAG_CURVE)}</td>
+      <td data-label=""><form class="row" data-adopt="${esc(u.mac)}"><input name="name" placeholder="Name this tool" style="flex:1"><button class="primary">Add</button></form></td>
+    </tr>`).join("");
+
+  $("updated").textContent = "Updated " + new Date().toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+}
+
+// =====================================================================
+// Load + actions
+// =====================================================================
+async function load() {
+  if (!token) return showLogin();
+  try {
+    state = await api("/summary");
+    $("login").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    render();
+  } catch (e) {
+    if (e.message !== "auth") flash("Could not load: " + e.message, "err");
+  }
+}
+
+async function addTool(mac, name) {
+  try {
+    await api("/tags", { method: "POST", body: JSON.stringify({ mac, name }) });
+    flash(`Added "${name}"`);
+    await load();
+    return true;
+  } catch (e) {
+    if (e.message !== "auth") flash(e.message, "err");
+    return false;
+  }
+}
+
+$("showAddBtn").onclick = () => { $("addForm").classList.remove("hidden"); $("addMac").focus(); };
+$("cancelAddBtn").onclick = () => $("addForm").classList.add("hidden");
+$("addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (await addTool($("addMac").value, $("addName").value)) {
+    $("addForm").reset();
+    $("addForm").classList.add("hidden");
+  }
+});
+$("refreshBtn").onclick = load;
+
+// Volts / % toggle
+function paintUnitButtons() {
+  document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("on", b.dataset.unit === battUnit));
+}
+document.querySelectorAll(".seg button").forEach((b) => {
+  b.onclick = () => {
+    battUnit = b.dataset.unit;
+    unitPref.set(battUnit);
+    paintUnitButtons();
+    if (state) render();
+  };
+});
+paintUnitButtons();
+
+// =====================================================================
+// Toolboxes: add / rename / new key / remove / pick for map
+// =====================================================================
+function showKey(name, key) {
+  $("keyPanel").innerHTML = `<strong>Device key for "${esc(name)}"</strong>
+    <div class="mono" style="margin:6px 0;font-size:15px;user-select:all">${esc(key)}</div>
+    <div class="muted">Copy this into that Walter's sketch: <span class="mono">DEVICE_KEY = "${esc(key)}"</span>.
+    It is shown <strong>only once</strong>.</div>
+    <button type="button" id="closeKeyBtn" style="margin-top:8px">I've copied it</button>`;
+  $("keyPanel").classList.remove("hidden");
+  $("closeKeyBtn").onclick = () => $("keyPanel").classList.add("hidden");
+}
+
+$("cancelAddBoxBtn").onclick = () => $("addBoxForm").classList.add("hidden");
+$("addBoxForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("addBoxName").value.trim();
+  try {
+    const d = await api("/devices", { method: "POST", body: JSON.stringify({ name }) });
+    $("addBoxForm").reset();
+    $("addBoxForm").classList.add("hidden");
+    showKey(d.name, d.deviceKey);
+    view = d.uuid; viewPref.set(view);
+    load();
+  } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
+});
+
+
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.id === "showAddBoxBtn") { $("addBoxForm").classList.remove("hidden"); $("addBoxName").focus(); return; }
+  if (t.dataset.editBox) { editingBox = t.dataset.editBox; render(); return; }
+  if (t.hasAttribute("data-cancel-box")) { editingBox = null; render(); return; }
+  if (t.dataset.newkeyBox) {
+    if (t.dataset.armed !== "1") {
+      t.dataset.armed = "1"; t.textContent = "Click again - old key stops working";
+      setTimeout(() => { if (t.isConnected) { t.dataset.armed = ""; t.textContent = "New key"; } }, 4000);
+      return;
+    }
+    try {
+      const r = await api(`/devices/${t.dataset.newkeyBox}/rotate-key`, { method: "POST" });
+      showKey(t.dataset.name, r.deviceKey);
+    } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
+    return;
+  }
+  if (t.dataset.deleteBox) {
+    if (t.dataset.armed !== "1") {
+      t.dataset.armed = "1"; t.textContent = "Click again to remove";
+      setTimeout(() => { if (t.isConnected) { t.dataset.armed = ""; t.textContent = "Remove"; } }, 4000);
+      return;
+    }
+    try {
+      await api(`/devices/${t.dataset.deleteBox}`, { method: "DELETE" });
+      flash(`Removed "${t.dataset.name}"`);
+      load();
+    } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
+    return;
+  }
+  // Click anywhere else on a toolbox card = show it on the map
+  const card = t.closest && t.closest(".box");
+  if (card && !t.closest("button, input, form")) { mapPick = card.dataset.box; render(); }
+});
+
+document.addEventListener("submit", async (e) => {
+  const f = e.target;
+  if (!f.dataset.renameBox) return;
+  e.preventDefault();
+  try {
+    await api(`/devices/${f.dataset.renameBox}`, { method: "PUT", body: JSON.stringify({ name: f.elements.namedItem("name").value }) });
+    editingBox = null;
+    flash("Toolbox renamed");
+    load();
+  } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
+});
+
+// Buttons and forms inside the tables (event delegation)
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.dataset.edit) { editing = t.dataset.edit; render(); return; }
+  if (t.hasAttribute("data-cancel")) { editing = null; render(); return; }
+  if (t.dataset.delete) {
+    // Two-click confirm instead of a browser popup
+    if (t.dataset.armed !== "1") {
+      t.dataset.armed = "1"; t.textContent = "Click again to remove";
+      setTimeout(() => { if (t.isConnected) { t.dataset.armed = ""; t.textContent = "Remove"; } }, 4000);
+      return;
+    }
+    try {
+      await api("/tags/" + t.dataset.delete, { method: "DELETE" });
+      flash(`Removed "${t.dataset.name}"`);
+      load();
+    } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
+  }
+});
+document.addEventListener("submit", async (e) => {
+  const f = e.target;
+  if (f.dataset.rename) {
+    e.preventDefault();
+    try {
+      await api("/tags/" + f.dataset.rename, { method: "PUT", body: JSON.stringify({ name: f.elements.namedItem("name").value }) });
+      editing = null;
+      flash("Renamed");
+      load();
+    } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
+  }
+  if (f.dataset.adopt) {
+    e.preventDefault();
+    addTool(f.dataset.adopt, f.elements.namedItem("name").value);
+  }
+});
+
+load();
+setInterval(() => { if (!editing && !editingBox && document.visibilityState === "visible") load(); }, REFRESH_MS);
+</script>
+</body>
+</html>

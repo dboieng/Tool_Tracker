@@ -1,0 +1,188 @@
+<div class="p-4 space-y-4">
+
+  <!-- ===== Title ===== -->
+  <div class="flex items-center justify-between gap-3 flex-wrap">
+    <div>
+      <h1 class="text-xl font-semibold">Tool Tracker</h1>
+      <p class="text-sm text-gray-500">Which tools are back in the toolbox</p>
+    </div>
+    <button type="button" class="px-3 py-1.5 rounded border border-gray-300 bg-white text-sm" (click)="load()" [disabled]="loading">
+      <i class="fas fa-sync-alt mr-1"></i> Refresh
+    </button>
+  </div>
+
+  @if (data) {
+    <!-- ===== Count + toolbox status ===== -->
+    <div class="grid gap-4 md:grid-cols-2">
+      <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <h2 class="font-semibold mb-2">Tools in the box</h2>
+        <div class="text-4xl font-bold">{{ data.summary.inBox }} of {{ data.summary.tools }}</div>
+        <div class="text-sm text-gray-500 mt-1">
+          {{ missingNames ? 'Missing: ' + missingNames : 'Every tool is in the box' }}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <h2 class="font-semibold mb-2">{{ device?.name || 'No toolbox set up yet' }}</h2>
+        @if (device) {
+          <div class="grid grid-cols-3 gap-2 text-sm">
+            <div class="bg-gray-50 rounded p-2">
+              <div class="text-xs text-gray-500">Last report</div>
+              <div class="font-semibold" [title]="device.lastReportOn | date:'medium'">
+                {{ ago(device.lastReportOn) }}
+                @if (isStale) { <span class="ml-1 px-2 rounded-full text-xs bg-yellow-100 text-yellow-800">late</span> }
+              </div>
+            </div>
+            <div class="bg-gray-50 rounded p-2">
+              <div class="text-xs text-gray-500">Walter battery</div>
+              <div class="font-semibold">{{ device.batteryV ? (device.batteryV | number:'1.2-2') + ' V' : '–' }}</div>
+            </div>
+            <div class="bg-gray-50 rounded p-2">
+              <div class="text-xs text-gray-500">LTE signal</div>
+              <div class="font-semibold">{{ lteWord(device.lteRsrp) }}</div>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- ===== Tools ===== -->
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-semibold">Tools</h2>
+        <button type="button" class="px-3 py-1.5 rounded border border-gray-300 text-sm" (click)="showAdd = !showAdd">+ Add tool</button>
+      </div>
+
+      @if (showAdd) {
+        <form class="flex gap-2 flex-wrap mb-3" (ngSubmit)="submitAdd()">
+          <input class="border rounded px-2 py-1.5 flex-1 font-mono text-sm" name="mac" [(ngModel)]="newMac" placeholder="Tag MAC e.g. ec:5a:5f:39:bd:42">
+          <input class="border rounded px-2 py-1.5 flex-1" name="name" [(ngModel)]="newName" placeholder="Tool name e.g. Hilti drill">
+          <button class="px-3 py-1.5 rounded bg-blue-900 text-white" type="submit">Save</button>
+          <button class="px-3 py-1.5 rounded border" type="button" (click)="showAdd = false">Cancel</button>
+        </form>
+      }
+
+      <table class="tt-table w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs text-gray-500 border-b">
+            <th class="py-2 px-2">Tool</th><th class="px-2">Status</th><th class="px-2">Last in box</th>
+            <th class="px-2">Signal</th><th class="px-2">Tag battery</th><th class="px-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of data.tags; track t.uuid) {
+            <tr class="border-b last:border-0">
+              <td class="py-2 px-2" data-label="Tool">
+                @if (editingUuid === t.uuid) {
+                  <form class="flex gap-2" (ngSubmit)="saveRename()">
+                    <input class="border rounded px-2 py-1 flex-1" name="editName" [(ngModel)]="editName">
+                    <button class="px-2 py-1 rounded bg-blue-900 text-white" type="submit">Save</button>
+                    <button class="px-2 py-1 rounded border" type="button" (click)="editingUuid = null">Cancel</button>
+                  </form>
+                } @else {
+                  <div class="font-semibold">{{ t.name }}</div>
+                  <div class="text-xs text-gray-500 font-mono">{{ t.mac }}</div>
+                }
+              </td>
+              <td class="px-2" data-label="Status">
+                @if (t.inBox) {
+                  <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">IN BOX</span>
+                } @else if (t.lastInBoxOn) {
+                  <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">MISSING</span>
+                } @else {
+                  <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">NOT SEEN YET</span>
+                }
+              </td>
+              <td class="px-2" data-label="Last in box" [title]="t.lastInBoxOn | date:'medium'">{{ t.inBox ? 'now' : ago(t.lastInBoxOn) }}</td>
+              <td class="px-2" data-label="Signal">{{ t.lastRssi !== null ? t.lastRssi + ' dBm' : '–' }}</td>
+              <td class="px-2" data-label="Tag battery">
+                @if (t.batteryV && t.batteryV < lowBatt) {
+                  <span class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800">{{ t.batteryV | number:'1.2-2' }} V low</span>
+                } @else {
+                  {{ t.batteryV ? (t.batteryV | number:'1.2-2') + ' V' : '–' }}
+                }
+              </td>
+              <td class="px-2 whitespace-nowrap" data-label="">
+                @if (editingUuid !== t.uuid) {
+                  <button type="button" class="text-blue-900 underline mr-2" (click)="startRename(t)">Rename</button>
+                  <button type="button" class="text-red-700 underline" (click)="remove(t)">
+                    {{ armedDelete === t.uuid ? 'Click again to remove' : 'Remove' }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="6" class="py-3 text-gray-500">No tools yet. Click "+ Add tool".</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== Location + changes ===== -->
+    <div class="grid gap-4 md:grid-cols-2">
+      <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <h2 class="font-semibold mb-2">Last known location</h2>
+        @if (mapUrl && device) {
+          <iframe class="w-full h-56 rounded border-0" [src]="mapUrl" loading="lazy" title="Toolbox location"></iframe>
+          <div class="text-xs text-gray-500 mt-2">
+            ±{{ device.gpsAccuracyM | number:'1.0-0' }} m, fixed {{ ago(device.gpsOn) }} ·
+            <a class="underline" [href]="mapsLink(device.latitude, device.longitude)" target="_blank" rel="noopener">Open in Google Maps</a>
+          </div>
+        } @else {
+          <div class="text-sm text-gray-500">No GPS fix received yet.</div>
+        }
+      </div>
+
+      <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <h2 class="font-semibold mb-2">Recent changes</h2>
+        <ul>
+          @for (c of data.changes; track $index) {
+            <li class="flex gap-2 items-center flex-wrap py-2 border-b last:border-0">
+              <span class="px-2 py-0.5 rounded-full text-xs font-semibold"
+                    [ngClass]="c.change === 'RETURNED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'">{{ c.change }}</span>
+              <span class="font-semibold">{{ c.toolName }}</span>
+              <span class="text-xs text-gray-500">
+                {{ c.on | date:'EEE d MMM, h:mm a' }}
+                @if (c.latitude !== null) { · <a class="underline" [href]="mapsLink(c.latitude, c.longitude)" target="_blank" rel="noopener">where</a> }
+              </span>
+            </li>
+          } @empty {
+            <li class="text-sm text-gray-500">No changes yet. A tool leaving or coming back shows up here.</li>
+          }
+        </ul>
+      </div>
+    </div>
+
+    <!-- ===== Unknown tags ===== -->
+    @if (data.unknown.length) {
+      <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <h2 class="font-semibold mb-2">Unknown tags nearby <span class="text-xs text-gray-500 font-normal">(last 7 days, not in the tool list)</span></h2>
+        <table class="tt-table w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-gray-500 border-b">
+              <th class="py-2 px-2">MAC</th><th class="px-2">Last heard</th><th class="px-2">Signal</th><th class="px-2">Battery</th><th class="px-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (u of data.unknown; track u.mac) {
+              <tr class="border-b last:border-0">
+                <td class="py-2 px-2 font-mono" data-label="MAC">{{ u.mac }}</td>
+                <td class="px-2" data-label="Last heard">{{ ago(u.lastSeenOn) }}</td>
+                <td class="px-2" data-label="Signal">{{ u.lastRssi !== null ? u.lastRssi + ' dBm' : '–' }}</td>
+                <td class="px-2" data-label="Battery">{{ u.batteryV ? (u.batteryV | number:'1.2-2') + ' V' : '–' }}</td>
+                <td class="px-2" data-label="">
+                  <form class="flex gap-2" (ngSubmit)="adopt(u.mac)">
+                    <input class="border rounded px-2 py-1 flex-1" [name]="'adopt-' + u.mac" [(ngModel)]="adoptNames[u.mac]" placeholder="Name this tool">
+                    <button class="px-3 py-1 rounded bg-blue-900 text-white" type="submit">Add</button>
+                  </form>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  } @else if (loading) {
+    <div class="text-gray-500">Loading…</div>
+  }
+</div>
