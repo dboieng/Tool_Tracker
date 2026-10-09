@@ -62,6 +62,9 @@ export const rotateDeviceKey = wrap(async (req, res) => {
   SuccessResponse(res, await service.rotateDeviceKey(orgOf(req), req.params.uuid),
     "New device key created. Copy it now - it is only shown once.");
 });
+export const updateDevice = wrap(async (req, res) => {
+  SuccessResponse(res, await service.updateDevice(orgOf(req), req.params.uuid, req.body || {}), "Toolbox renamed");
+});
 export const deleteDevice = wrap(async (req, res) => {
   SuccessResponse(res, await service.deleteDevice(orgOf(req), req.params.uuid), "Device removed");
 });

@@ -43,7 +43,8 @@ const publicDevice = (d) => ({
   createdOn: d.createdOn,
 });
 
-const publicTag = (t, deviceNames = new Map()) => ({
+// deviceById: Map(device id -> device) so each tool can say which toolbox it is in
+const publicTag = (t, deviceById = new Map()) => ({
   uuid: t.uuid,
   mac: t.mac,
   name: t.name,
@@ -54,7 +55,8 @@ const publicTag = (t, deviceNames = new Map()) => ({
   lastInBoxOn: t.lastInBoxOn,
   lastRssi: t.lastRssi,
   batteryV: t.batteryV,
-  deviceName: t.lastDeviceId ? deviceNames.get(t.lastDeviceId) || null : null,
+  deviceName: deviceById.get(t.lastDeviceId)?.name || null,
+  deviceUuid: deviceById.get(t.lastDeviceId)?.uuid || null,
 });
 
 // =====================================================================
@@ -124,6 +126,7 @@ export const ingestReport = async (device, body = {}) => {
     const items = [];
     const returned = [];
     const left = [];
+    const moved = [];
     const knownMacs = new Set();
     let inCount = 0;
 
@@ -131,6 +134,11 @@ export const ingestReport = async (device, body = {}) => {
       knownMacs.add(tag.mac);
       const h = heard.get(tag.mac);
 
+      // The tool is IN a DIFFERENT toolbox right now. This box only matters if it hears
+      // the tool INSIDE itself (= the tool was moved here). Otherwise leave it alone -
+      // e.g. two toolboxes parked side by side hear each other's tools through the walls.
+      const inOtherBox = tag.inBox && tag.lastDeviceId && tag.lastDeviceId !== device.id;
+      if (inOtherBox && !(h && h.inBox)) continue;
       // Not heard, and last seen in a DIFFERENT toolbox -> this report says nothing about it.
       if (!h && tag.lastDeviceId && tag.lastDeviceId !== device.id) continue;
 
@@ -139,7 +147,8 @@ export const ingestReport = async (device, body = {}) => {
 
       let change = null;
       if (!firstReport) {
-        if (inBox && !tag.inBox) { change = "RETURNED"; returned.push(tag.name); }
+        if (inBox && inOtherBox) { change = "MOVED"; moved.push(tag.name); }
+        else if (inBox && !tag.inBox) { change = "RETURNED"; returned.push(tag.name); }
         else if (!inBox && tag.inBox) { change = "LEFT"; left.push(tag.name); }
       }
 
@@ -190,6 +199,7 @@ export const ingestReport = async (device, body = {}) => {
       tools: tags.length,
       returned,
       left,
+      moved,
       unknown: unknownCount,
     };
   });
@@ -205,6 +215,7 @@ export const getSummary = async (organisationId) => {
     prisma.toolTrackerTag.findMany({ where: { organisationId, deleteFlag: false }, orderBy: { name: "asc" } }),
   ]);
   const deviceNames = new Map(devices.map((d) => [d.id, d.name]));
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
   const knownMacs = new Set(tags.map((t) => t.mac));
 
   // Unknown tags heard in the last 7 days
@@ -231,7 +242,7 @@ export const getSummary = async (organisationId) => {
 
   return {
     devices: devices.map(publicDevice),
-    tags: tags.map((t) => publicTag(t, deviceNames)),
+    tags: tags.map((t) => publicTag(t, deviceById)),
     unknown: [...unknownMap.values()],
     changes,
     summary: { tools: tags.length, inBox: tags.filter((t) => t.inBox).length },
@@ -378,6 +389,18 @@ export const rotateDeviceKey = async (organisationId, uuid) => {
   const deviceKey = newDeviceKey();
   await prisma.toolTrackerDevice.update({ where: { id: device.id }, data: { keyHash: hashDeviceKey(deviceKey) } });
   return { uuid, deviceKey };
+};
+
+/** Rename a toolbox, e.g. to the job site it is at ("12 Smith St"). */
+export const updateDevice = async (organisationId, uuid, { name }) => {
+  const device = await prisma.toolTrackerDevice.findFirst({ where: { uuid, organisationId, deleteFlag: false } });
+  if (!device) throw new ApiError("Toolbox not found", 404);
+  if (!name || !String(name).trim()) throw new ApiError("Toolbox name is required", 400);
+  const updated = await prisma.toolTrackerDevice.update({
+    where: { id: device.id },
+    data: { name: String(name).trim().slice(0, 100) },
+  });
+  return publicDevice(updated);
 };
 
 export const deleteDevice = async (organisationId, uuid) => {
