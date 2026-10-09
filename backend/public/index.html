@@ -67,7 +67,8 @@
      If the card is too narrow for both, the links drop to the next line (still on the right). */
   .boxhead-row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .boxhead-row .boxsel { max-width: 240px; }
-  .boxhead-row .linkbar { flex-basis: 100%; white-space: nowrap; }  #showAddBoxBtn { white-space: nowrap; margin-left: auto; }
+  .boxhead-row .linkbar { flex-basis: 100%; white-space: nowrap; }
+  #showAddBoxBtn { white-space: nowrap; margin-left: auto; }
   .boxhead-row #boxHead { flex: 1; }
   .pill.move { background: #dbeafe; color: #1e40af; }
   select { font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: #fff; }
@@ -310,6 +311,15 @@ const viewPref = {
 let view = viewPref.get();  // "all" or a toolbox uuid
 let mapPick = null;         // in "all" view: which box the map shows
 
+// New device keys waiting to be put into a Walter: { boxUuid: { name, key, issuedAt } }
+// Kept for this browser tab only (sessionStorage) and removed automatically once that
+// toolbox's Walter sends its first report with the new key.
+const pendingStore = {
+  get() { try { return JSON.parse(sessionStorage.getItem("toolTrackerPendingKeys") || "{}"); } catch { return {}; } },
+  set(v) { try { sessionStorage.setItem("toolTrackerPendingKeys", JSON.stringify(v)); } catch {} },
+};
+let pendingKeys = pendingStore.get();
+
 function render() {
   const { devices, tags, unknown, changes, summary } = state;
 
@@ -341,6 +351,33 @@ function render() {
     $("boxSelect").onchange = (e) => { view = e.target.value; viewPref.set(view); mapPick = null; render(); };
   }
   $("boxLinks").innerHTML = sel && editingBox !== sel.uuid ? boxLinks(sel) : "";
+
+  // ---- new-key panel: only for the toolbox it belongs to; stays until that Walter reports ----
+  for (const [uuid, p] of Object.entries(pendingKeys)) {
+    const dev = devices.find((x) => x.uuid === uuid);
+    if (!dev || (dev.lastReportOn && new Date(dev.lastReportOn) > new Date(p.issuedAt))) delete pendingKeys[uuid];
+  }
+  pendingStore.set(pendingKeys);
+  const pend = sel ? pendingKeys[sel.uuid] : null;
+  if (sel && pend) {
+    $("keyPanel").innerHTML = (pend.key
+      ? `<strong>Device key for "${esc(sel.name)}"</strong>
+         <div class="mono" style="margin:6px 0;font-size:15px;user-select:all">${esc(pend.key)}</div>
+         <div class="muted">Put this in that Walter's sketch: <span class="mono">DEVICE_KEY = "${esc(pend.key)}"</span>, then upload.
+         After you hide it, it can't be shown again.</div>
+         <button type="button" id="hideKeyBtn" style="margin-top:8px">I've copied it, hide the key</button>`
+      : `<strong>Waiting for "${esc(sel.name)}" to report with its new key</strong>`) +
+      `<div class="muted" style="margin-top:6px">This message goes away by itself when this toolbox's Walter sends its first report.</div>`;
+    $("keyPanel").classList.remove("hidden");
+    const hb = $("hideKeyBtn");
+    if (hb) hb.onclick = () => { pendingKeys[sel.uuid].key = null; pendingStore.set(pendingKeys); render(); };
+  } else if (sel && !sel.lastReportOn) {
+    $("keyPanel").innerHTML = `<strong>"${esc(sel.name)}" hasn't reported yet</strong>
+      <div class="muted">Put its device key in the Walter sketch and upload. Lost the key? Click <b>New key</b>.</div>`;
+    $("keyPanel").classList.remove("hidden");
+  } else {
+    $("keyPanel").classList.add("hidden");
+  }
 
   // right card + left card
   if (sel) {
@@ -379,6 +416,7 @@ function render() {
       <section class="card box ${d.uuid === mapPick ? "sel" : ""}" data-box="${d.uuid}">
         <div class="row" style="justify-content:space-between;margin-bottom:12px">${title}
           ${editingBox === d.uuid ? "" : `<div class="linkbar">${boxLinks(d)}</div>`}</div>
+        ${pendingKeys[d.uuid] || !d.lastReportOn ? '<div style="margin-bottom:10px"><span class="pill warn">Waiting for first report</span> <span class="muted">pick this toolbox in the drop-down to see its key</span></div>' : ""}
         <div class="stats">
           ${statBlock("Last report", lastReportHtml(d), when(d.lastReportOn))}
           ${statBlock("Walter battery", battText(d.batteryV, WALTER_CURVE), battTitle(d.batteryV, WALTER_CURVE))}
@@ -513,14 +551,9 @@ paintUnitButtons();
 // =====================================================================
 // Toolboxes: add / rename / new key / remove / pick for map
 // =====================================================================
-function showKey(name, key) {
-  $("keyPanel").innerHTML = `<strong>Device key for "${esc(name)}"</strong>
-    <div class="mono" style="margin:6px 0;font-size:15px;user-select:all">${esc(key)}</div>
-    <div class="muted">Copy this into that Walter's sketch: <span class="mono">DEVICE_KEY = "${esc(key)}"</span>.
-    It is shown <strong>only once</strong>.</div>
-    <button type="button" id="closeKeyBtn" style="margin-top:8px">I've copied it</button>`;
-  $("keyPanel").classList.remove("hidden");
-  $("closeKeyBtn").onclick = () => $("keyPanel").classList.add("hidden");
+function addPendingKey(uuid, name, key) {
+  pendingKeys[uuid] = { name, key, issuedAt: new Date().toISOString() };
+  pendingStore.set(pendingKeys);
 }
 
 $("cancelAddBoxBtn").onclick = () => $("addBoxForm").classList.add("hidden");
@@ -531,7 +564,7 @@ $("addBoxForm").addEventListener("submit", async (e) => {
     const d = await api("/devices", { method: "POST", body: JSON.stringify({ name }) });
     $("addBoxForm").reset();
     $("addBoxForm").classList.add("hidden");
-    showKey(d.name, d.deviceKey);
+    addPendingKey(d.uuid, d.name, d.deviceKey);
     view = d.uuid; viewPref.set(view);
     load();
   } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
@@ -551,7 +584,9 @@ document.addEventListener("click", async (e) => {
     }
     try {
       const r = await api(`/devices/${t.dataset.newkeyBox}/rotate-key`, { method: "POST" });
-      showKey(t.dataset.name, r.deviceKey);
+      addPendingKey(t.dataset.newkeyBox, t.dataset.name, r.deviceKey);
+      view = t.dataset.newkeyBox; viewPref.set(view);
+      load();
     } catch (err) { if (err.message !== "auth") flash(err.message, "err"); }
     return;
   }
